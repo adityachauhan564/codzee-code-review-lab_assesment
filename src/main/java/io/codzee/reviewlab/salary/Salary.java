@@ -57,7 +57,11 @@ public class Salary {
         this.updatedAt = now();
     }
 
+    /** Replaces the salary; re-setting the current value is a no-op, so updatedAt only moves on real changes. */
     void change(BigDecimal amount, String currency) {
+        if (this.amount.compareTo(amount) == 0 && this.currency.equals(currency)) {
+            return;
+        }
         this.amount = amount;
         this.currency = currency;
         this.updatedAt = now();

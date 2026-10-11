@@ -15,6 +15,7 @@ import io.codzee.reviewlab.employee.EmployeeRepository;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
@@ -33,6 +35,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class SalaryServiceTest {
 
     private static final long EMPLOYEE_ID = 7L;
+    private static final Instant LAST_CHANGE = Instant.parse("2026-01-01T00:00:00Z");
 
     private SalaryRepository salaryRepository;
     private EmployeeRepository employeeRepository;
@@ -80,6 +83,43 @@ class SalaryServiceTest {
         }
 
         @ParameterizedTest
+        @ValueSource(strings = {"1000", "1000.00", "1000.000", "1E+3"})
+        void settingTheSameSalaryAgainKeepsUpdatedAt(String sameAmount) {
+            Salary existing = salary(EMPLOYEE_ID, "1000.00");
+            ReflectionTestUtils.setField(existing, "updatedAt", LAST_CHANGE);
+            when(salaryRepository.findById(EMPLOYEE_ID)).thenReturn(Optional.of(existing));
+
+            SalaryResponse response = salaryService.setSalary(EMPLOYEE_ID, request(sameAmount));
+
+            assertThat(response.updatedAt()).isEqualTo(LAST_CHANGE);
+            assertThat(existing.getUpdatedAt()).isEqualTo(LAST_CHANGE);
+        }
+
+        @Test
+        void changingTheAmountRefreshesUpdatedAt() {
+            Salary existing = salary(EMPLOYEE_ID, "1000.00");
+            ReflectionTestUtils.setField(existing, "updatedAt", LAST_CHANGE);
+            when(salaryRepository.findById(EMPLOYEE_ID)).thenReturn(Optional.of(existing));
+
+            SalaryResponse response = salaryService.setSalary(EMPLOYEE_ID, request("1000.01"));
+
+            assertThat(response.updatedAt()).isAfter(LAST_CHANGE);
+        }
+
+        @Test
+        void sameAmountInADifferentCurrencyIsARealChange() {
+            Salary legacy = salary(EMPLOYEE_ID, "1000.00");
+            ReflectionTestUtils.setField(legacy, "currency", "EUR");
+            ReflectionTestUtils.setField(legacy, "updatedAt", LAST_CHANGE);
+            when(salaryRepository.findById(EMPLOYEE_ID)).thenReturn(Optional.of(legacy));
+
+            SalaryResponse response = salaryService.setSalary(EMPLOYEE_ID, request("1000.00"));
+
+            assertThat(response.currency()).isEqualTo("USD");
+            assertThat(response.updatedAt()).isAfter(LAST_CHANGE);
+        }
+
+        @ParameterizedTest
         @ValueSource(strings = {"1500", "1500.5", "1500.50"})
         void normalizesAmountToTwoDecimalPlaces(String amount) {
             when(salaryRepository.findById(EMPLOYEE_ID)).thenReturn(Optional.of(salary(EMPLOYEE_ID, "1.00")));
@@ -100,7 +140,39 @@ class SalaryServiceTest {
         }
 
         @ParameterizedTest
-        @ValueSource(strings = {"0", "0.00", "-0.01", "-1000.00"})
+        @CsvSource({
+            "1500.500, 1500.50",
+            "1500.5000000, 1500.50",
+            "0.010, 0.01",
+            "9999999999999.990, 9999999999999.99"})
+        void acceptsExtraDecimalPlacesThatAreOnlyTrailingZeros(String amount, String expected) {
+            when(salaryRepository.findById(EMPLOYEE_ID)).thenReturn(Optional.of(salary(EMPLOYEE_ID, "1.00")));
+
+            assertThat(salaryService.setSalary(EMPLOYEE_ID, request(amount)).amount())
+                    .isEqualTo(new BigDecimal(expected));
+        }
+
+        @ParameterizedTest
+        @CsvSource({
+            "1E+2, 100.00",
+            "1.5E+3, 1500.00",
+            "1E-2, 0.01",
+            "9.99999999999999E+12, 9999999999999.99"})
+        void acceptsScientificNotationWithinBounds(String amount, String expected) {
+            when(salaryRepository.findById(EMPLOYEE_ID)).thenReturn(Optional.of(salary(EMPLOYEE_ID, "1.00")));
+
+            assertThat(salaryService.setSalary(EMPLOYEE_ID, request(amount)).amount())
+                    .isEqualTo(new BigDecimal(expected));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"10.5550", "0.0010", "1E+13", "1E-3", "9999999999999.995", "1E+999999999", "1E-999999999"})
+        void rejectsAmountsWhoseSignificantDigitsExceedTheColumn(String amount) {
+            assertRejected(new SalaryRequest(new BigDecimal(amount), "USD"), "amount");
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"0", "0.00", "-0.01", "-1000.00", "0E-10", "-0.000"})
         void rejectsZeroAndNegativeAmounts(String amount) {
             assertRejected(new SalaryRequest(new BigDecimal(amount), "USD"), "amount");
         }

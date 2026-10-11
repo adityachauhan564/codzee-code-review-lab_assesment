@@ -53,7 +53,18 @@ class SalaryControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"0", "-5.00", "10.555", "\"abc\""})
+    @ValueSource(strings = {"1234.500", "1.2345E+3", "1234.5"})
+    void equivalentAmountNotationsReachTheServiceAsTheSameValue(String amount) throws Exception {
+        when(salaryService.setSalary(eq(7L), any())).thenReturn(SALARY);
+
+        mockMvc.perform(put("/api/employees/7/salary").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\": " + amount + ", \"currency\": \"USD\"}"))
+                .andExpect(status().isOk());
+        verify(salaryService).setSalary(7L, new SalaryRequest(new BigDecimal("1234.50"), "USD"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-5.00", "10.555", "\"abc\"", "1E+999999999"})
     void invalidAmountReturns400(String amount) throws Exception {
         mockMvc.perform(put("/api/employees/7/salary").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"amount\": " + amount + ", \"currency\": \"USD\"}"))
