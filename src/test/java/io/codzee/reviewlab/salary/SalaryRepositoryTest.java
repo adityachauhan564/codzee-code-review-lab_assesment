@@ -20,6 +20,9 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 class SalaryRepositoryTest {
 
+    /** Never assigned: the test database is shared across contexts, so a small "missing" id may exist. */
+    private static final long UNKNOWN_EMPLOYEE_ID = Long.MAX_VALUE;
+
     @Autowired
     private SalaryRepository salaryRepository;
 
@@ -57,7 +60,7 @@ class SalaryRepositoryTest {
         Employee alan = employeeRepository.save(new Employee("Alan Turing", "alan@example.com", "Research"));
         salaryRepository.saveAndFlush(new Salary(ada, new BigDecimal("100.00"), "USD"));
 
-        List<Salary> found = salaryRepository.findAllById(List.of(ada.getId(), alan.getId(), 999L));
+        List<Salary> found = salaryRepository.findAllById(List.of(ada.getId(), alan.getId(), UNKNOWN_EMPLOYEE_ID));
 
         assertThat(found).extracting(Salary::getEmployeeId).containsExactly(ada.getId());
     }
