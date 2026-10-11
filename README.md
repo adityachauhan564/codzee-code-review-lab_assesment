@@ -95,6 +95,8 @@ src/main/resources/
 - Empty input, or no matching salaries, returns `0`, `0.00`, `0.00`.
 - If stored salaries ever had different currencies, the summary refuses to add them up and fails
   instead.
+- The summary runs as **one aggregate query** (`COUNT` and `SUM` grouped by currency). It never
+  loads salary rows into memory, even for the maximum of 1000 ids.
 
 ## Database schema
 
@@ -318,8 +320,9 @@ Every error uses `application/problem+json`:
   control exists, a minimum group size (or summary-only permissions) should be considered.
 - **Single currency (USD).** Multi-currency support would need per-currency summaries or an
   exchange-rate policy.
-- **The summary is computed in memory** over at most 1000 loaded rows. A database aggregate
-  (`SUM`/`COUNT`) would avoid loading entities.
+- **Summary arithmetic is split between the database and Java.** The database computes the count
+  and exact `SUM`, and the service computes the rounded average. This is tested on H2;
+  MySQL's `SUM` over `DECIMAL` is also exact, and it was checked manually, not in CI.
 - **Concurrency:** two simultaneous first-time `PUT .../salary` calls for the same employee race on
   the primary key, and the loser gets a 409. Updates are last-write-wins, with no optimistic locking.
 - **Email validation** follows Hibernate Validator's `@Email`, which accepts addresses without a

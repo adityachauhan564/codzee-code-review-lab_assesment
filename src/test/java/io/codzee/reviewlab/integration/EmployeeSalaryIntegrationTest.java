@@ -31,6 +31,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @ActiveProfiles("test")
 class EmployeeSalaryIntegrationTest {
 
+    /** Never assigned: the test database is shared across contexts, so a small "missing" id may exist. */
+    private static final long UNKNOWN_EMPLOYEE_ID = Long.MAX_VALUE;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -62,7 +65,7 @@ class EmployeeSalaryIntegrationTest {
                 .andExpect(jsonPath("$.salary").doesNotExist());
 
         mockMvc.perform(post("/api/salaries/summary").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"employeeIds\": [" + ada + ", " + alan + ", " + ada + ", 999999]}"))
+                        .content("{\"employeeIds\": [" + ada + ", " + alan + ", " + ada + ", " + UNKNOWN_EMPLOYEE_ID + "]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.employeeCount").value(2))
                 .andExpect(content().string(containsString("\"totalSalary\":3500.50")))
@@ -98,9 +101,9 @@ class EmployeeSalaryIntegrationTest {
 
     @Test
     void invalidAndMissingResourcesAreReportedConsistently() throws Exception {
-        setSalary(999999, "100.00").andExpect(status().isNotFound());
-        setSalary(999999, "0").andExpect(status().isBadRequest());
-        mockMvc.perform(get("/api/employees/999999")).andExpect(status().isNotFound());
+        setSalary(UNKNOWN_EMPLOYEE_ID, "100.00").andExpect(status().isNotFound());
+        setSalary(UNKNOWN_EMPLOYEE_ID, "0").andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/employees/{id}", UNKNOWN_EMPLOYEE_ID)).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/employees").param("sort", "salary")).andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/employees").param("page", "-1"))
                 .andExpect(status().isBadRequest())
