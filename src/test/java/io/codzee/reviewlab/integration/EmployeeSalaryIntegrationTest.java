@@ -101,6 +101,10 @@ class EmployeeSalaryIntegrationTest {
         setSalary(999999, "0").andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/employees/999999")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/employees").param("sort", "salary")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/employees").param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("page"));
+        mockMvc.perform(get("/api/employees").param("page", "99999999999")).andExpect(status().isBadRequest());
     }
 
     @Test

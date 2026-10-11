@@ -58,7 +58,9 @@ src/main/resources/
   so uniqueness is case-insensitive (`Ada@Example.com` and `ada@example.com` conflict).
 - `department`: required, not blank, at most 100 characters (free text).
 - `PUT /api/employees/{id}` is a full update: all three fields are required.
-- The list endpoint is paginated: default page size 20, sorted by `id`, maximum page size 100.
+- The list endpoint is paginated: default page size 20, sorted by `id`, maximum page size 100
+  (larger sizes are capped). A negative `page`, a `size` below 1, or a non-integer value returns 400
+  rather than silently falling back to a default page.
 - Employee responses never contain salary data.
 
 ### Salary

@@ -9,11 +9,6 @@ spring:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:reviewlab}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
-  data:
-    web:
-      pageable:
-        # Clients asking for more get this many; keeps list responses bounded.
-        max-page-size: 100
   jpa:
     open-in-view: false
     hibernate:
