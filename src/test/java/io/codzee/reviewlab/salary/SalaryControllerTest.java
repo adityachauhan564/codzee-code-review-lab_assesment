@@ -1,6 +1,8 @@
 package io.codzee.reviewlab.salary;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -70,6 +72,17 @@ class SalaryControllerTest {
                         .content("{\"amount\": " + amount + ", \"currency\": \"USD\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+        verifyNoInteractions(salaryService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"1E+2147483647", "100E+2147483647"})
+    void extremeExponentIsReportedAsAnAmountValidationError(String amount) throws Exception {
+        mockMvc.perform(put("/api/employees/7/salary").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\": " + amount + ", \"currency\": \"USD\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Request validation failed"))
+                .andExpect(jsonPath("$.errors[*].field").value(everyItem(is("amount"))));
         verifyNoInteractions(salaryService);
     }
 
