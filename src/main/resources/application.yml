@@ -9,6 +9,11 @@ spring:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:reviewlab}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+  web:
+    resources:
+      # JSON API only: no static files are served, so unknown paths get a plain 404 problem
+      # ("No endpoint GET /x") instead of falling through to the static resource handler.
+      add-mappings: false
   jpa:
     open-in-view: false
     hibernate:
