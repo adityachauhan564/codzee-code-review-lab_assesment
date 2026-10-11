@@ -46,7 +46,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /** Safety net for constraint races the service-level checks cannot see, e.g. two concurrent inserts. */
     @ExceptionHandler(DataIntegrityViolationException.class)
     ProblemDetail handleDataIntegrityViolation(DataIntegrityViolationException ex) {
-        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
+        // The driver message echoes the offending values (e.g. an email), so only the cause type is logged.
+        log.warn("Data integrity violation ({})", ex.getMostSpecificCause().getClass().getName());
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "The request conflicts with existing data");
     }
 

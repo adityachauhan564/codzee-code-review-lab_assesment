@@ -1,5 +1,6 @@
 package io.codzee.reviewlab.employee;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
@@ -22,8 +23,11 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -36,6 +40,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(EmployeeController.class)
+@ExtendWith(OutputCaptureExtension.class)
 class EmployeeControllerTest {
 
     private static final String VALID_BODY = """
@@ -105,7 +110,8 @@ class EmployeeControllerTest {
     }
 
     @Test
-    void databaseConstraintViolationReturns409WithoutSqlDetails() throws Exception {
+    void databaseConstraintViolationReturns409WithoutSqlDetailsOrPersonalDataInLogs(CapturedOutput output)
+            throws Exception {
         when(employeeService.create(any())).thenThrow(new DataIntegrityViolationException(
                 "could not execute statement [Duplicate entry 'ada@example.com' for key 'employee.uk_employee_email']"));
 
@@ -113,6 +119,7 @@ class EmployeeControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value("The request conflicts with existing data"))
                 .andExpect(content().string(not(containsString("uk_employee_email"))));
+        assertThat(output).contains("Data integrity violation").doesNotContain("ada@example.com");
     }
 
     @Test
