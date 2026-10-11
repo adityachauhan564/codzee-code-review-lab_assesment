@@ -15,6 +15,7 @@ import io.codzee.reviewlab.employee.EmployeeRepository;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,6 +35,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class SalaryServiceTest {
 
     private static final long EMPLOYEE_ID = 7L;
+    private static final Instant LAST_CHANGE = Instant.parse("2026-01-01T00:00:00Z");
 
     private SalaryRepository salaryRepository;
     private EmployeeRepository employeeRepository;
@@ -78,6 +80,43 @@ class SalaryServiceTest {
             assertThat(response).extracting(SalaryResponse::employeeId, SalaryResponse::amount)
                     .containsExactly(EMPLOYEE_ID, new BigDecimal("2000.00"));
             verify(salaryRepository, never()).save(any());
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"1000", "1000.00", "1000.000", "1E+3"})
+        void settingTheSameSalaryAgainKeepsUpdatedAt(String sameAmount) {
+            Salary existing = salary(EMPLOYEE_ID, "1000.00");
+            ReflectionTestUtils.setField(existing, "updatedAt", LAST_CHANGE);
+            when(salaryRepository.findById(EMPLOYEE_ID)).thenReturn(Optional.of(existing));
+
+            SalaryResponse response = salaryService.setSalary(EMPLOYEE_ID, request(sameAmount));
+
+            assertThat(response.updatedAt()).isEqualTo(LAST_CHANGE);
+            assertThat(existing.getUpdatedAt()).isEqualTo(LAST_CHANGE);
+        }
+
+        @Test
+        void changingTheAmountRefreshesUpdatedAt() {
+            Salary existing = salary(EMPLOYEE_ID, "1000.00");
+            ReflectionTestUtils.setField(existing, "updatedAt", LAST_CHANGE);
+            when(salaryRepository.findById(EMPLOYEE_ID)).thenReturn(Optional.of(existing));
+
+            SalaryResponse response = salaryService.setSalary(EMPLOYEE_ID, request("1000.01"));
+
+            assertThat(response.updatedAt()).isAfter(LAST_CHANGE);
+        }
+
+        @Test
+        void sameAmountInADifferentCurrencyIsARealChange() {
+            Salary legacy = salary(EMPLOYEE_ID, "1000.00");
+            ReflectionTestUtils.setField(legacy, "currency", "EUR");
+            ReflectionTestUtils.setField(legacy, "updatedAt", LAST_CHANGE);
+            when(salaryRepository.findById(EMPLOYEE_ID)).thenReturn(Optional.of(legacy));
+
+            SalaryResponse response = salaryService.setSalary(EMPLOYEE_ID, request("1000.00"));
+
+            assertThat(response.currency()).isEqualTo("USD");
+            assertThat(response.updatedAt()).isAfter(LAST_CHANGE);
         }
 
         @ParameterizedTest

@@ -73,7 +73,8 @@ src/main/resources/
     how they were written.
 - `currency` must be sent explicitly and must be `USD`, the only supported currency. Any other value
   is rejected, so currencies are never mixed.
-- `updatedAt` is the UTC instant the salary was last set (microsecond precision).
+- `updatedAt` is the UTC instant the salary last changed (microsecond precision). Re-sending the
+  current amount and currency is a no-op and leaves it unchanged.
 - All money arithmetic uses `BigDecimal`. `double` and `float` are never used for money.
 
 ### Salary summary
