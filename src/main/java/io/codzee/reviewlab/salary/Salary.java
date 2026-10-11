@@ -11,7 +11,7 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
-import org.hibernate.annotations.UpdateTimestamp;
+import java.time.temporal.ChronoUnit;
 
 /**
  * An employee's current salary. It shares the employee's primary key, so each employee has at most
@@ -20,6 +20,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Entity
 @Table(name = "salary")
 public class Salary {
+
+    /** The single currency the system accepts; amounts in different currencies are never mixed. */
+    public static final String SUPPORTED_CURRENCY = "USD";
 
     /** Monetary amounts are stored as DECIMAL(15,2): up to 13 integer digits and exactly 2 decimals. */
     static final int AMOUNT_INTEGER_DIGITS = 13;
@@ -40,7 +43,6 @@ public class Salary {
     @Column(nullable = false, length = 3)
     private String currency;
 
-    @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -52,11 +54,18 @@ public class Salary {
         this.employee = employee;
         this.amount = amount;
         this.currency = currency;
+        this.updatedAt = now();
     }
 
     void change(BigDecimal amount, String currency) {
         this.amount = amount;
         this.currency = currency;
+        this.updatedAt = now();
+    }
+
+    /** Truncated to the DATETIME(6) column precision so API responses match what is stored. */
+    private static Instant now() {
+        return Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
     public Long getEmployeeId() {
