@@ -81,6 +81,20 @@ class EmployeeControllerTest {
     }
 
     @Test
+    void controlCharactersInNameReturn400WithFieldError() throws Exception {
+        String body = """
+                {"name": "Ada\\nERROR forged log line", "email": "ada@example.com", "department": "Engineering"}
+                """;
+
+        mockMvc.perform(post("/api/employees").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("name"))
+                .andExpect(jsonPath("$.errors[0].message")
+                        .value("must not contain control characters or start or end with whitespace"));
+        verifyNoInteractions(employeeService);
+    }
+
+    @Test
     void malformedJsonReturns400() throws Exception {
         mockMvc.perform(post("/api/employees").contentType(MediaType.APPLICATION_JSON).content("{\"name\":"))
                 .andExpect(status().isBadRequest())
