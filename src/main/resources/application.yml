@@ -1,3 +1,18 @@
 spring:
   application:
     name: codzee-code-review-lab
+  config:
+    # Lets `./mvnw spring-boot:run` pick up the same .env file Docker Compose uses.
+    # Real environment variables still take precedence.
+    import: optional:file:.env[.properties]
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:reviewlab}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema; Hibernate only checks that entities match it.
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
