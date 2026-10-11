@@ -1,0 +1,3 @@
+spring:
+  application:
+    name: codzee-code-review-lab
