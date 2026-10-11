@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -180,12 +181,13 @@ class EmployeeControllerTest {
                 .andExpect(jsonPath("$.page.totalElements").value(1));
     }
 
-    @Test
-    void listCapsPageSize() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"101", "5000", "2147483648", "99999999999", "9223372036854775807"})
+    void listCapsAnyOversizedPageSize(String size) throws Exception {
         Pageable capped = PageRequest.of(0, 100, Sort.by("id"));
         when(employeeService.list(eq(capped))).thenReturn(new PageImpl<>(List.of(), capped, 0));
 
-        mockMvc.perform(get("/api/employees").param("size", "5000"))
+        mockMvc.perform(get("/api/employees").param("size", size))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page.size").value(100));
     }
@@ -218,7 +220,7 @@ class EmployeeControllerTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"page, 99999999999", "page, abc", "size, 99999999999", "size, 1.5"})
+    @CsvSource({"page, 99999999999", "page, abc", "size, 9223372036854775808", "size, abc", "size, 1.5"})
     void nonIntegerPagingParameterReturns400InsteadOfADefaultPage(String parameter, String value) throws Exception {
         mockMvc.perform(get("/api/employees").param(parameter, value))
                 .andExpect(status().isBadRequest())
