@@ -27,6 +27,8 @@ public class Salary {
     /** Monetary amounts are stored as DECIMAL(15,2): up to 13 integer digits and exactly 2 decimals. */
     static final int AMOUNT_INTEGER_DIGITS = 13;
     static final int AMOUNT_SCALE = 2;
+    /** Largest value DECIMAL(15,2) can hold. */
+    static final String MAX_AMOUNT = "9999999999999.99";
 
     @Id
     @Column(name = "employee_id")
