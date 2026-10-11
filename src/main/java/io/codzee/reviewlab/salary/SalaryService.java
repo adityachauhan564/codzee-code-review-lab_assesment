@@ -44,8 +44,8 @@ public class SalaryService {
     @Transactional
     public SalaryResponse setSalary(Long employeeId, SalaryRequest request) {
         validate(request);
-        // Exact: validation guarantees at most AMOUNT_SCALE decimals, so no rounding can happen here.
-        BigDecimal amount = request.amount().setScale(Salary.AMOUNT_SCALE);
+        // Valid requests always carry the amount at the column scale (see SalaryRequest).
+        BigDecimal amount = request.amount();
         Salary salary = salaryRepository.findById(employeeId).orElse(null);
         if (salary != null) {
             salary.change(amount, request.currency());

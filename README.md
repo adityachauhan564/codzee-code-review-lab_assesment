@@ -64,9 +64,13 @@ src/main/resources/
   idempotent. The employee must exist.
 - `amount`:
   - Required and strictly greater than `0`.
-  - At most **2 decimal places**. `10.555` is rejected, never rounded.
+  - At most **2 significant decimal places**. `10.555` is rejected, never rounded. Extra trailing
+    zeros are fine (`1500.500` is accepted as `1500.50`).
   - At most 13 integer digits, so the maximum is `9999999999999.99`, which fits `DECIMAL(15,2)`.
-  - Stored and returned with scale 2 (`1500.5` → `1500.50`).
+  - Scientific notation is accepted when the value fits (`1.5E+3` → `1500.00`), and out-of-range
+    exponents such as `1E+999999999` are rejected.
+  - Stored and returned with scale 2 (`1500.5` → `1500.50`), so equal amounts are equal regardless of
+    how they were written.
 - `currency` must be sent explicitly and must be `USD`, the only supported currency. Any other value
   is rejected, so currencies are never mixed.
 - `updatedAt` is the UTC instant the salary was last set (microsecond precision).
