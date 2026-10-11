@@ -15,11 +15,12 @@ public class Employee {
     static final int EMAIL_MAX_LENGTH = 254;
     static final int DEPARTMENT_MAX_LENGTH = 100;
 
-    /** Control characters (Cc) and bidirectional embedding/override/isolate characters. */
-    private static final String UNPRINTABLE = "\\p{Cc}\\u202A-\\u202E\\u2066-\\u2069";
+    /** Control characters (Cc), Unicode line/paragraph separators and bidi embedding/override/isolate characters. */
+    private static final String UNPRINTABLE = "\\p{Cc}\\u2028\\u2029\\u202A-\\u202E\\u2066-\\u2069";
     /**
      * Free text such as names: printable characters only, no leading or trailing (Unicode) whitespace.
-     * Rejects line breaks that could forge log or CSV lines and bidi overrides that spoof how text displays.
+     * Rejects every line break that could forge log or CSV lines (including U+2028/U+2029, which Java
+     * \R, Python and JavaScript treat as newlines) and bidi overrides that spoof how text displays.
      * Values made only of characters String.trim() removes (U+0000-U+0020) match, so @NotBlank alone
      * reports them instead of two errors per field; other whitespace-only values, such as U+00A0 that
      * {@code @NotBlank} accepts, fail here.

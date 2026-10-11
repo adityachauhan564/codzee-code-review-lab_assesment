@@ -49,14 +49,15 @@ public class EmployeeController {
 
     /**
      * Paging parameters are validated rather than silently replaced: a negative page, a size below 1
-     * or a non-integer value is a 400. Sizes above MAX_PAGE_SIZE are capped.
+     * or a non-integer value is a 400. Any size above MAX_PAGE_SIZE is capped; size is bound as a long
+     * so that large values are capped like any other instead of failing int conversion.
      */
     @GetMapping
     public PagedModel<EmployeeResponse> list(
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = DEFAULT_PAGE_SIZE) @Min(1) int size,
+            @RequestParam(defaultValue = DEFAULT_PAGE_SIZE) @Min(1) long size,
             @SortDefault("id") Sort sort) {
-        Pageable pageable = PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE), sort);
+        Pageable pageable = PageRequest.of(page, (int) Math.min(size, MAX_PAGE_SIZE), sort);
         return new PagedModel<>(employeeService.list(pageable));
     }
 
