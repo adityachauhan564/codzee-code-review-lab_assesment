@@ -91,6 +91,8 @@ class EmployeeServiceTest {
         "Ada\tLovelace",           // tab
         "Ada\nLovelace",           // line feed (log / CSV injection)
         "Ada\rLovelace",           // carriage return
+        "Ada\u2028ERROR forged",   // line separator (Zl): Java \R, Python splitlines() and JS treat it as a newline
+        "Ada\u2029Lovelace",       // paragraph separator (Zp)
         "Ada\0",                   // NUL
         "Ada\u007F",               // DEL
         "\u202Eecalevol adA",      // right-to-left override (display spoofing)
