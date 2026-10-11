@@ -1,0 +1,7 @@
+# In-memory H2 in MySQL mode. Flyway applies the real migrations, so tests
+# exercise the production schema without needing Docker or local MySQL.
+spring:
+  datasource:
+    url: jdbc:h2:mem:reviewlab;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
