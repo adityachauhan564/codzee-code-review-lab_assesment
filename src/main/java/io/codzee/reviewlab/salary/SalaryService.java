@@ -3,6 +3,7 @@ package io.codzee.reviewlab.salary;
 import io.codzee.reviewlab.common.ResourceNotFoundException;
 import io.codzee.reviewlab.employee.Employee;
 import io.codzee.reviewlab.employee.EmployeeRepository;
+import io.codzee.reviewlab.salary.SalaryRepository.CurrencyTotal;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validator;
@@ -56,26 +57,33 @@ public class SalaryService {
         return SalaryResponse.from(salaryRepository.save(new Salary(employee, amount, request.currency())));
     }
 
+    /**
+     * Aggregates in the database: one query returns the count and exact sum per currency, so no
+     * Salary entities are loaded however many employees are requested.
+     */
     public SalarySummary summarize(SalarySummaryRequest request) {
         validate(request);
         Set<Long> employeeIds = new LinkedHashSet<>(request.employeeIds());
         if (employeeIds.isEmpty()) {
-            return calculateSummary(List.of());
+            return summary(0, ZERO_AMOUNT);
         }
-        return calculateSummary(salaryRepository.findAllById(employeeIds));
+        List<CurrencyTotal> totals = salaryRepository.totalsByCurrency(employeeIds);
+        if (totals.isEmpty()) {
+            return summary(0, ZERO_AMOUNT);
+        }
+        if (totals.size() > 1 || !Salary.SUPPORTED_CURRENCY.equals(totals.get(0).getCurrency())) {
+            throw new IllegalStateException("Can only summarize salaries in " + Salary.SUPPORTED_CURRENCY);
+        }
+        CurrencyTotal total = totals.get(0);
+        // Exact: every stored amount has scale 2, so their sum needs no rounding.
+        return summary(Math.toIntExact(total.getEmployeeCount()), total.getTotal().setScale(Salary.AMOUNT_SCALE));
     }
 
-    private static SalarySummary calculateSummary(List<Salary> salaries) {
-        if (salaries.stream().anyMatch(salary -> !Salary.SUPPORTED_CURRENCY.equals(salary.getCurrency()))) {
-            throw new IllegalStateException("Cannot summarize salaries in different currencies");
-        }
-        BigDecimal total = salaries.stream()
-                .map(Salary::getAmount)
-                .reduce(ZERO_AMOUNT, BigDecimal::add);
-        BigDecimal average = salaries.isEmpty()
+    private static SalarySummary summary(int employeeCount, BigDecimal total) {
+        BigDecimal average = employeeCount == 0
                 ? ZERO_AMOUNT
-                : total.divide(BigDecimal.valueOf(salaries.size()), Salary.AMOUNT_SCALE, AVERAGE_ROUNDING);
-        return new SalarySummary(salaries.size(), total, average, Salary.SUPPORTED_CURRENCY);
+                : total.divide(BigDecimal.valueOf(employeeCount), Salary.AMOUNT_SCALE, AVERAGE_ROUNDING);
+        return new SalarySummary(employeeCount, total, average, Salary.SUPPORTED_CURRENCY);
     }
 
     private <T> void validate(T request) {

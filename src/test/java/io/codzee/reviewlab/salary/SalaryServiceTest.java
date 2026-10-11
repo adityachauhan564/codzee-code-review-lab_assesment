@@ -18,7 +18,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.LongStream;
@@ -252,9 +252,8 @@ class SalaryServiceTest {
     class Summarize {
 
         @Test
-        void calculatesCountTotalAndAverage() {
-            when(salaryRepository.findAllById(any())).thenReturn(List.of(
-                    salary(1L, "100.00"), salary(2L, "200.00"), salary(3L, "300.01")));
+        void calculatesCountTotalAndAverageFromTheDatabaseTotals() {
+            when(salaryRepository.totalsByCurrency(any())).thenReturn(List.of(totals("USD", 3, "600.01")));
 
             SalarySummary summary = salaryService.summarize(summaryRequest(1L, 2L, 3L));
 
@@ -264,7 +263,7 @@ class SalaryServiceTest {
         @Test
         void averageUsesBankersRounding() {
             // 0.05 / 2 = 0.025, which HALF_EVEN rounds to 0.02 (HALF_UP would give 0.03)
-            when(salaryRepository.findAllById(any())).thenReturn(List.of(salary(1L, "0.01"), salary(2L, "0.04")));
+            when(salaryRepository.totalsByCurrency(any())).thenReturn(List.of(totals("USD", 2, "0.05")));
 
             SalarySummary summary = salaryService.summarize(summaryRequest(1L, 2L));
 
@@ -273,13 +272,24 @@ class SalaryServiceTest {
 
         @Test
         void largeTotalsDoNotOverflowOrLosePrecision() {
-            when(salaryRepository.findAllById(any())).thenReturn(List.of(
-                    salary(1L, "9999999999999.99"), salary(2L, "9999999999999.99"), salary(3L, "0.01")));
+            when(salaryRepository.totalsByCurrency(any()))
+                    .thenReturn(List.of(totals("USD", 3, "19999999999999.99")));
 
             SalarySummary summary = salaryService.summarize(summaryRequest(1L, 2L, 3L));
 
             assertThat(summary.totalSalary()).isEqualTo(new BigDecimal("19999999999999.99"));
             assertThat(summary.averageSalary()).isEqualTo(new BigDecimal("6666666666666.66"));
+        }
+
+        @Test
+        void databaseSumIsNormalizedToTwoDecimalPlaces() {
+            // Databases may widen the scale of SUM(DECIMAL(15,2)); the API contract is scale 2.
+            when(salaryRepository.totalsByCurrency(any())).thenReturn(List.of(totals("USD", 2, "300.0000")));
+
+            SalarySummary summary = salaryService.summarize(summaryRequest(1L, 2L));
+
+            assertThat(summary.totalSalary()).isEqualTo(new BigDecimal("300.00"));
+            assertThat(summary.averageSalary()).isEqualTo(new BigDecimal("150.00"));
         }
 
         @Test
@@ -292,33 +302,39 @@ class SalaryServiceTest {
 
         @Test
         void employeesWithoutSalaryAreNotCounted() {
-            when(salaryRepository.findAllById(any())).thenReturn(List.of());
+            when(salaryRepository.totalsByCurrency(any())).thenReturn(List.of());
 
             SalarySummary summary = salaryService.summarize(summaryRequest(1L, 2L));
 
-            assertThat(summary.employeeCount()).isZero();
-            assertThat(summary.totalSalary()).isEqualTo(new BigDecimal("0.00"));
+            assertThat(summary).isEqualTo(new SalarySummary(0, new BigDecimal("0.00"), new BigDecimal("0.00"), "USD"));
         }
 
         @Test
         @SuppressWarnings("unchecked")
-        void duplicateIdsAreCountedOnce() {
-            when(salaryRepository.findAllById(any())).thenReturn(List.of(salary(1L, "100.00")));
+        void duplicateIdsAreQueriedOnce() {
+            when(salaryRepository.totalsByCurrency(any())).thenReturn(List.of(totals("USD", 1, "100.00")));
 
             salaryService.summarize(summaryRequest(1L, 1L, 1L));
 
-            ArgumentCaptor<Iterable<Long>> ids = ArgumentCaptor.forClass(Iterable.class);
-            verify(salaryRepository).findAllById(ids.capture());
+            ArgumentCaptor<Collection<Long>> ids = ArgumentCaptor.forClass(Collection.class);
+            verify(salaryRepository).totalsByCurrency(ids.capture());
             assertThat(ids.getValue()).containsExactly(1L);
         }
 
         @Test
         void mixedCurrenciesAreRefusedRatherThanSummed() {
-            Salary euro = salary(2L, "100.00");
-            ReflectionTestUtils.setField(euro, "currency", "EUR");
-            when(salaryRepository.findAllById(any())).thenReturn(List.of(salary(1L, "100.00"), euro));
+            when(salaryRepository.totalsByCurrency(any()))
+                    .thenReturn(List.of(totals("USD", 1, "100.00"), totals("EUR", 1, "100.00")));
 
             assertThatThrownBy(() -> salaryService.summarize(summaryRequest(1L, 2L)))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+
+        @Test
+        void unsupportedStoredCurrencyIsRefused() {
+            when(salaryRepository.totalsByCurrency(any())).thenReturn(List.of(totals("EUR", 1, "100.00")));
+
+            assertThatThrownBy(() -> salaryService.summarize(summaryRequest(1L)))
                     .isInstanceOf(IllegalStateException.class);
         }
 
@@ -345,9 +361,18 @@ class SalaryServiceTest {
         @Test
         void acceptsMaximumNumberOfIds() {
             List<Long> ids = LongStream.rangeClosed(1, SalarySummaryRequest.MAX_EMPLOYEE_IDS).boxed().toList();
-            when(salaryRepository.findAllById(any())).thenReturn(Collections.emptyList());
+            when(salaryRepository.totalsByCurrency(any())).thenReturn(List.of());
 
             assertThat(salaryService.summarize(new SalarySummaryRequest(ids)).employeeCount()).isZero();
+        }
+
+        /** Stands in for the projection Spring Data returns from SalaryRepository.totalsByCurrency. */
+        private record Totals(String getCurrency, long getEmployeeCount, BigDecimal getTotal)
+                implements SalaryRepository.CurrencyTotal {
+        }
+
+        private static SalaryRepository.CurrencyTotal totals(String currency, long employeeCount, String total) {
+            return new Totals(currency, employeeCount, new BigDecimal(total));
         }
 
         private SalarySummaryRequest summaryRequest(Long... ids) {
