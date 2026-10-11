@@ -24,6 +24,8 @@ import jakarta.validation.Validation;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -77,6 +79,20 @@ class EmployeeControllerTest {
                 .andExpect(jsonPath("$.title").value("Bad Request"))
                 .andExpect(jsonPath("$.detail").value("Request validation failed"))
                 .andExpect(jsonPath("$.errors[*].field").value(containsInAnyOrder("name", "email")));
+        verifyNoInteractions(employeeService);
+    }
+
+    @Test
+    void controlCharactersInNameReturn400WithFieldError() throws Exception {
+        String body = """
+                {"name": "Ada\\nERROR forged log line", "email": "ada@example.com", "department": "Engineering"}
+                """;
+
+        mockMvc.perform(post("/api/employees").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("name"))
+                .andExpect(jsonPath("$.errors[0].message")
+                        .value("must not contain control characters or start or end with whitespace"));
         verifyNoInteractions(employeeService);
     }
 
@@ -172,6 +188,42 @@ class EmployeeControllerTest {
         mockMvc.perform(get("/api/employees").param("size", "5000"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page.size").value(100));
+    }
+
+    @Test
+    void listPassesPageSizeAndSortThrough() throws Exception {
+        Pageable expected = PageRequest.of(2, 5, Sort.by(Sort.Direction.DESC, "name"));
+        when(employeeService.list(eq(expected))).thenReturn(new PageImpl<>(List.of(ADA), expected, 11));
+
+        mockMvc.perform(get("/api/employees").param("page", "2").param("size", "5").param("sort", "name,desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.number").value(2))
+                .andExpect(jsonPath("$.page.size").value(5));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "page, -1, must be greater than or equal to 0",
+        "size, 0,  must be greater than or equal to 1",
+        "size, -5, must be greater than or equal to 1"})
+    void outOfRangePagingParameterReturns400InsteadOfADefaultPage(String parameter, String value, String message)
+            throws Exception {
+        mockMvc.perform(get("/api/employees").param(parameter, value))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("Request validation failed"))
+                .andExpect(jsonPath("$.errors[0].field").value(parameter))
+                .andExpect(jsonPath("$.errors[0].message").value(message));
+        verifyNoInteractions(employeeService);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"page, 99999999999", "page, abc", "size, 99999999999", "size, 1.5"})
+    void nonIntegerPagingParameterReturns400InsteadOfADefaultPage(String parameter, String value) throws Exception {
+        mockMvc.perform(get("/api/employees").param(parameter, value))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(containsString("'" + parameter + "'")));
+        verifyNoInteractions(employeeService);
     }
 
     @Test

@@ -2,6 +2,7 @@ package io.codzee.reviewlab.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -101,6 +102,19 @@ class EmployeeSalaryIntegrationTest {
         setSalary(999999, "0").andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/employees/999999")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/employees").param("sort", "salary")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/employees").param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("page"));
+        mockMvc.perform(get("/api/employees").param("page", "99999999999")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void unknownRouteReturnsProblemWithoutRevealingStaticResourceHandling() throws Exception {
+        mockMvc.perform(get("/api/does-not-exist"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("No endpoint GET /api/does-not-exist."))
+                .andExpect(content().string(not(containsString("static"))));
     }
 
     @Test

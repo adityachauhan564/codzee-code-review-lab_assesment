@@ -16,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -75,6 +76,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         List<FieldViolation> violations = ex.getBindingResult().getFieldErrors().stream()
                 .map(error -> new FieldViolation(error.getField(), error.getDefaultMessage()))
+                .toList();
+        return ResponseEntity.badRequest().body(validationProblem(violations));
+    }
+
+    /** Constraint failures on @RequestParam / @PathVariable values, reported like body field errors. */
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(HandlerMethodValidationException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        List<FieldViolation> violations = ex.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream()
+                        .map(error -> new FieldViolation(result.getMethodParameter().getParameterName(),
+                                error.getDefaultMessage())))
                 .toList();
         return ResponseEntity.badRequest().body(validationProblem(violations));
     }

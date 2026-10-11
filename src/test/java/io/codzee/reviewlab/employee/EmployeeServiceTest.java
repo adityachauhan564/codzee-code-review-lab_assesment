@@ -83,6 +83,47 @@ class EmployeeServiceTest {
                 .hasMessageContaining("department");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+        " Ada Lovelace",           // leading space
+        "Ada Lovelace ",           // trailing space
+        "Ada Lovelace\u00A0",      // trailing no-break space
+        "Ada\tLovelace",           // tab
+        "Ada\nLovelace",           // line feed (log / CSV injection)
+        "Ada\rLovelace",           // carriage return
+        "Ada\0",                   // NUL
+        "Ada\u007F",               // DEL
+        "\u202Eecalevol adA",      // right-to-left override (display spoofing)
+        "Ada\u2066Lovelace",       // left-to-right isolate
+        "\u00A0",                  // only a no-break space: String.trim() (used by @NotBlank) keeps it
+        "\u2003\u2003"})           // only em spaces
+    void rejectsControlCharactersAndSurroundingWhitespace(String text) {
+        assertThatThrownBy(() -> employeeService.create(new EmployeeRequest(text, "ada@example.com", text)))
+                .isInstanceOf(ConstraintViolationException.class)
+                .hasMessageContaining("name")
+                .hasMessageContaining("department");
+        verifyNoInteractions(employeeRepository);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "A",
+        "Ada Lovelace",
+        "Jos\u00E9 \u00D1\u00FA\u00F1ez",
+        "Se\u00E1n O'Brien-Smith",
+        "\u674E\u5C0F\u9F8D",      // Chinese
+        "\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645", // Persian; the zero-width non-joiner is a legitimate format character
+        "R&D <Platform>"})         // markup is stored verbatim; escaping is the consumer's job
+    void acceptsPrintableTextIncludingNonLatinScripts(String text) {
+        when(employeeRepository.save(any(Employee.class)))
+                .thenAnswer(invocation -> withId(invocation.getArgument(0), 1L));
+
+        EmployeeResponse response = employeeService.create(new EmployeeRequest(text, "ada@example.com", text));
+
+        assertThat(response.name()).isEqualTo(text);
+        assertThat(response.department()).isEqualTo(text);
+    }
+
     @Test
     void rejectsDuplicateEmailOnCreateWithoutSaving() {
         when(employeeRepository.existsByEmail("ada@example.com")).thenReturn(true);
